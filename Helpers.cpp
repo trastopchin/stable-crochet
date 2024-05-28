@@ -53,6 +53,23 @@ std::tuple<Eigen::MatrixXd, Eigen::MatrixXi> helpers::cat_mesh(
     return std::make_tuple(V_cat, F_cat);
 }
 
+// https://www.graphics.rwth-aachen.de/media/papers/p_Pau021.pdf
+void helpers::covariance_analysis(
+    const Eigen::MatrixXd& P,
+    Eigen::MatrixXd& eigenvectors, Eigen::VectorXd& eigenvalues
+)
+{
+    // Construct the 3 x 3 covariance matrix C
+    auto mean = P.colwise().mean();
+    auto difference = P.rowwise() - mean;
+    auto C = difference.transpose() * difference;
+
+    // Eigen analysis
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigen_solver(C);
+    eigenvectors = eigen_solver.eigenvectors();
+    eigenvalues = eigen_solver.eigenvalues();
+}
+
 Eigen::MatrixXi helpers::ordered_edge_matrix(int n_vertices)
 {
     Eigen::MatrixXi E = Eigen::MatrixXi(n_vertices - 1, 2);
@@ -101,47 +118,6 @@ Eigen::VectorXi helpers::vertex_indices(
     for (int i = 0; i < n_vertices; i++)
         vertex_indices(i) = i;
     return vertex_indices;
-}
-
-void helpers::extract_connected_component(
-    const Eigen::MatrixXd &V,
-    const Eigen::MatrixXi &F,
-    const Eigen::VectorXi &C,
-    const Eigen::VectorXi &K,
-    const int component,
-    Eigen::MatrixXd &V_component,
-    Eigen::MatrixXi &F_component)
-{
-    // Extract the vertices from the connected component
-    int n_component_vertices = K(component);
-    V_component = Eigen::MatrixXd(n_component_vertices, V.cols());
-    int new_vertex_index = 0;
-    Eigen::VectorXi old_to_new_vertex_index = Eigen::VectorXi::Constant(V.rows(), -1);
-    for (int i = 0; i < V.rows() && new_vertex_index < n_component_vertices; i++)
-    {
-        if (C(i) == component)
-        {
-            V_component.row(new_vertex_index) = V.row(i);
-            old_to_new_vertex_index(i) = new_vertex_index;
-            new_vertex_index++;
-        }
-    }
-
-    // Use the old_to_new_vertex_index map to extract the simplices
-    F_component = F;
-    int new_simplex_index = 0;
-    for (int i = 0; i < F.rows(); i++)
-    {
-        // If the first vertex of the simplex belongs to the component
-        if (C(F(i, 0)) == component)
-        {
-            // Extract the component simplex
-            for (int j = 0; j < F.cols(); j++)
-                F_component(new_simplex_index, j) = old_to_new_vertex_index(F(i, j));
-            new_simplex_index++;
-        }
-    }
-    F_component = F_component.topRows(new_simplex_index);
 }
 
 void arap_based::parameterization(
@@ -195,6 +171,161 @@ std::tuple<double, double> arap_based::distortion(
         }
 
     return std::make_tuple(distortion, max_difference);
+}
+
+void arap_based::resampling(
+    const Eigen::MatrixXd &V,
+    const Eigen::MatrixXi &F,
+    const Eigen::MatrixXd &V_uv,
+    const double resampling_height,
+    const double resampling_width,
+    const double rotation,
+    std::vector<Eigen::MatrixXd> &V_contours_resampled,
+    std::vector<Eigen::MatrixXi> &E_contours_resampled)
+{
+    // Clear the contours
+    V_contours_resampled.clear();
+    E_contours_resampled.clear();
+
+    // Covariance analysis to "optimally" align the points for regular resampling
+    Eigen::MatrixXd eigenvectors;
+    Eigen::VectorXd eigenvalues;
+    helpers::covariance_analysis(V_uv, eigenvectors, eigenvalues);
+    Eigen::MatrixXd inverse = eigenvectors.inverse();
+    Eigen::MatrixXd V_uv_aligned = V_uv * inverse.transpose();
+
+    // Translate to center
+    Eigen::RowVectorXd center = V_uv_aligned.colwise().mean();
+    V_uv_aligned = V_uv_aligned.rowwise() - center;
+
+    // Rotate
+    double radians = rotation * 2 * M_PI;
+    Eigen::Matrix2d rotation_matrix;
+    rotation_matrix << std::cos(radians), -std::sin(radians),
+                       std::sin(radians),  std::cos(radians);
+    Eigen::Matrix2d rotation_matrix_inverse = rotation_matrix.inverse();
+    V_uv_aligned = V_uv_aligned * rotation_matrix.transpose();
+
+    // Compute the bounding box
+    Eigen::RowVector2d bb_min, bb_max, diagonal;
+    bb_min = V_uv_aligned.colwise().minCoeff();
+    bb_max = V_uv_aligned.colwise().maxCoeff();
+    diagonal = bb_max - bb_min;
+
+    // Regular resampling
+    double uv_width = diagonal[0];
+    double uv_height = diagonal[1];
+    int n_height_samples = uv_height / resampling_height;
+    int n_width_samples = uv_width / resampling_width;
+    std::vector<Eigen::RowVector2d> samples;
+    
+    bool found_first_row = false;
+    for (int i = 0; i < n_height_samples; i++) {
+        // Sample the row
+        Eigen::MatrixXd V_contour_resampled(n_width_samples, 2);
+        for (int j = 0; j < n_width_samples; j++) {
+            Eigen::RowVector2d sample = bb_min + Eigen::RowVector2d(i * resampling_width, 0) + Eigen::RowVector2d(0, j * resampling_height);
+            V_contour_resampled.row(j) = sample;
+        }
+        // Undo the rotation
+        V_contour_resampled *= rotation_matrix_inverse.transpose();
+
+        // Undo the translation
+        V_contour_resampled = V_contour_resampled.rowwise() + center;
+
+        // Undo the optimal alignment transformation
+        V_contour_resampled *= eigenvectors.transpose();
+
+        // Push the row forward
+        Eigen::MatrixXd P;
+        arap_based::push_points_forward(V, F, V_uv, V_contour_resampled, P);
+        
+        if (P.rows() != 0) {
+            found_first_row = true;
+            V_contour_resampled = P;
+            V_contours_resampled.push_back(V_contour_resampled);
+            E_contours_resampled.push_back(helpers::ordered_edge_matrix(P.rows()));
+        }
+        else if (P.rows() == 0 && !found_first_row)
+            continue;
+        else if (P.rows() == 0 && found_first_row)
+            return;
+    }
+}
+
+void arap_based::P_uv_to_B_and_F(
+    const Eigen::MatrixXd &V_uv,
+    const Eigen::MatrixXi &F,
+    const Eigen::MatrixXd &P_uv,
+    Eigen::MatrixXd &P_uv_to_B,
+    Eigen::VectorXi &P_uv_to_F)
+{
+    // Map from each row of P_uv to its corresponding triangle
+    P_uv_to_F = Eigen::VectorXi::Constant(P_uv.rows(), 1, -1);
+    // Map from each row of P_uv to its corresponding barycentric coordinates
+    P_uv_to_B = Eigen::MatrixXd(P_uv.rows(), 3);
+
+    // Triangle corner points
+    Eigen::MatrixXd A = V_uv(F.col(0), Eigen::all);
+    Eigen::MatrixXd B = V_uv(F.col(1), Eigen::all);
+    Eigen::MatrixXd C = V_uv(F.col(2), Eigen::all);
+    
+    for (int i = 0; i < P_uv.rows(); i++) {
+        // Replicate the uv point F.rows() times
+        // to get its barycentric coordinates for each triangle
+        Eigen::MatrixXd P_uv_i = P_uv.row(i).replicate(F.rows(), 1);
+        Eigen::MatrixXd L;
+        igl::barycentric_coordinates(P_uv_i, A, B, C, L);
+
+        // Determine which triangle the point belongs to
+        double epsilon = 1e-4;
+        helpers::ArrayXb sum_to_one = (L.array().rowwise().sum() - 1).abs() < epsilon;
+        helpers::ArrayXb all_non_negative = (L.array() >= 0).rowwise().all();
+        helpers::ArrayXb valid = sum_to_one && all_non_negative;
+        for (int j = 0; j < F.rows(); j++) {
+            if (valid(j)) {
+                P_uv_to_F(i) = j;
+                P_uv_to_B.row(i) = L.row(j);
+                break;
+            }
+        }
+    }
+}
+
+void arap_based::push_points_forward(
+    const Eigen::MatrixXd &V,
+    const Eigen::MatrixXi &F,
+    const Eigen::MatrixXd &V_uv,
+    const Eigen::MatrixXd &P_uv,
+    Eigen::MatrixXd &P)
+{
+    // Get the maps from uv points to barycentric coordinates and triangle indices
+    Eigen::MatrixXd P_uv_to_B;
+    Eigen::VectorXi P_uv_to_F;
+    arap_based::P_uv_to_B_and_F(V_uv, F, P_uv, P_uv_to_B, P_uv_to_F);
+
+    // Extract the submatrix of valid barycentric coordinates and triangle indices
+    std::vector<Eigen::RowVector3d> B_valid;
+    std::vector<Eigen::RowVectorXi> I_valid;
+    for (int i = 0; i < P_uv_to_B.rows(); i++) {
+        // If the uv point has a corresponding triangle
+        if (P_uv_to_F(i) != -1) {
+            B_valid.push_back(P_uv_to_B.row(i));
+            I_valid.push_back(Eigen::RowVectorXi::Constant(1, 1, P_uv_to_F(i)));
+        }
+    }
+    // Return empty P if there are no valid points
+    int n_valid = B_valid.size();
+    if (n_valid == 0) {
+        P = Eigen::MatrixXd::Zero(0, 0);
+        return;
+    }
+    // Otherwise push the points forward
+    Eigen::MatrixXd B;
+    Eigen::VectorXi I;
+    igl::cat(1, B_valid, B);
+    igl::cat(1, I_valid, I);
+    igl::barycentric_interpolation(V, F, B, I, P);
 }
 
 void igarashi::wrapping(
