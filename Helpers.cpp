@@ -374,9 +374,19 @@ void igarashi::wrapping(
             // Get the connected components of the contour_width values isolines
             Eigen::SparseMatrix<int> A;
             igl::adjacency_matrix(E_next, A);
+            
+            // Terminate if the contour doesn't have two boundary vertices
+            Eigen::VectorXi vertex_degrees = A * Eigen::VectorXi::Ones(A.cols());
+            int n_boundary_vertices = 0;
+            for (int i = 0; i < vertex_degrees.rows(); i++)
+                if (vertex_degrees(i) == 1)
+                    n_boundary_vertices++;
+            if (n_boundary_vertices != 2)
+                return;
+
+            // Terminate if there is not exactly one component
             Eigen::VectorXi C, K;
             igl::connected_components(A, C, K);
-            // Terminate if there is not exactly one component
             if (K.rows() != 1)
                 return;
         }
