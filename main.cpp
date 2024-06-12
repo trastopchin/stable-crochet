@@ -25,7 +25,7 @@ double max_difference = 0.0;
 Eigen::MatrixXd V_igarashi;
 Eigen::MatrixXi E_igarashi;
 int first_vertex = 0;
-int last_vertex = 0;
+int second_vertex = 1;
 double stitch_width = 0.77;  // cm
 double stitch_height = 0.77; // cm
 
@@ -145,14 +145,14 @@ void arap_based_helper(
 void igarashi_helper(
     igl::opengl::glfw::Viewer &viewer,
     const int first_vertex,
-    const int last_vertex,
+    const int second_vertex,
     const double contour_width,
     const double sampling_width,
     Eigen::MatrixXd &V_cat,
     Eigen::MatrixXi &E_cat)
 {
     // Extract the first contour
-    Eigen::MatrixXd V_start = V(Eigen::seq(first_vertex, last_vertex), Eigen::all);
+    Eigen::MatrixXd V_start = V(Eigen::Array2i(first_vertex, second_vertex), Eigen::all);
     Eigen::MatrixXi E_start = helpers::ordered_edge_matrix(V_start.rows());
 
     // Extract the remaining contours
@@ -272,10 +272,14 @@ int main(int argc, char *argv[])
 
         // Igarashi
         if (ImGui::TreeNodeEx("Igarashi's Algorithm", ImGuiTreeNodeFlags_DefaultOpen)) {
-            if (ImGui::Button("Igarashi"))
-                igarashi_helper(viewer, first_vertex, last_vertex, stitch_height, stitch_width, V_igarashi, E_igarashi);
+            if (ImGui::Button("Igarashi")) {
+                if (first_vertex != second_vertex)
+                    igarashi_helper(viewer, first_vertex, second_vertex, stitch_height, stitch_width, V_igarashi, E_igarashi);
+                else
+                    std::cout << "Error: first vertex cannot be the same as the last vertex!" << std::endl;
+            }
             ImGui::InputInt("First vertex", &first_vertex);
-            ImGui::InputInt("Last vertex", &last_vertex);
+            ImGui::InputInt("Second vertex", &second_vertex);
             ImGui::TreePop();
         }
 
