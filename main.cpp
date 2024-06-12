@@ -9,6 +9,7 @@
 
 #include "Helpers.h"
 
+// Input mesh
 Eigen::MatrixXd V;
 Eigen::MatrixXi F;
 
@@ -23,12 +24,15 @@ double max_difference = 0.0;
 // igarashi
 Eigen::MatrixXd V_igarashi;
 Eigen::MatrixXi E_igarashi;
+int first_vertex = 0;
+int last_vertex = 0;
 double stitch_width = 0.77;  // cm
 double stitch_height = 0.77; // cm
 
-// Color
+// Color helper
 auto gold = Eigen::RowVector3d(igl::GOLD_DIFFUSE[0], igl::GOLD_DIFFUSE[1], igl::GOLD_DIFFUSE[2]);
 
+// View the input mesh, the ARAP-parameterization, the ARAP-based method, and igarashi's method
 bool key_down(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
 {
     // View input mesh
@@ -66,7 +70,8 @@ bool key_down(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier
     return false;
 }
 
-void arap_based_helper_1(
+// Compute the ARAP parameterization and update the viewer
+void arap_parameterization_helper(
     igl::opengl::glfw::Viewer &viewer,
     const double resampling_height,
     const double resampling_width,
@@ -81,7 +86,8 @@ void arap_based_helper_1(
     key_down(viewer, '2', 0);
 }
 
-void arap_based_helper_2(
+// Perform the ARAP-based method (after computing the ARAP parameterization)
+void arap_based_helper(
     igl::opengl::glfw::Viewer &viewer,
     const double resampling_height,
     const double resampling_width,
@@ -98,7 +104,6 @@ void arap_based_helper_2(
 
     // Construct the stitch graph
     std::vector<std::vector<std::vector<int>>> A_contours;
-    std::cout << "started meshing" << std::endl;
     igarashi::meshing(V_contours_resampled, E_contours_resampled, A_contours);
 
     // Visualize the stitch graph
@@ -125,46 +130,47 @@ void arap_based_helper_2(
     }
 
     // Add the stitch graph
-    Eigen::MatrixXd V_cat_2;
-    Eigen::MatrixXi E_cat_2;
-    std::tie(V_cat_2, E_cat_2) = helpers::cat_mesh(V_mesh_list, E_mesh_list);
-    std::tie(V_cat, E_cat) = helpers::cat_mesh(V_cat, E_cat, V_cat_2, E_cat_2);
+    if (V_mesh_list.size() > 0) {
+        Eigen::MatrixXd V_cat_2;
+        Eigen::MatrixXi E_cat_2;
+        std::tie(V_cat_2, E_cat_2) = helpers::cat_mesh(V_mesh_list, E_mesh_list);
+        std::tie(V_cat, E_cat) = helpers::cat_mesh(V_cat, E_cat, V_cat_2, E_cat_2);
+    }
 
     // Update the viewer
     key_down(viewer, '3', 0);
 }
 
+// Perform igarashi's method
 void igarashi_helper(
     igl::opengl::glfw::Viewer &viewer,
-    double contour_width,
-    double sampling_width,
+    const int first_vertex,
+    const int last_vertex,
+    const double contour_width,
+    const double sampling_width,
     Eigen::MatrixXd &V_cat,
     Eigen::MatrixXi &E_cat)
 {
-    auto start_seq = Eigen::seq(36, 67);
-
-    Eigen::MatrixXd V_start = V(start_seq, Eigen::all);
+    // Extract the first contour
+    Eigen::MatrixXd V_start = V(Eigen::seq(first_vertex, last_vertex), Eigen::all);
     Eigen::MatrixXi E_start = helpers::ordered_edge_matrix(V_start.rows());
 
+    // Extract the remaining contours
     std::vector<Eigen::MatrixXd> V_contours;
     std::vector<Eigen::MatrixXi> E_contours;
-    std::cout << "started wrapping" << std::endl;
     igarashi::wrapping(V, F, V_start, E_start, contour_width, V_contours, E_contours);
-    std::cout << "finished wrapping" << std::endl;
 
+    // Resample the contours
     std::vector<Eigen::MatrixXd> V_contours_resampled;
     std::vector<Eigen::MatrixXi> E_contours_resampled;
-    std::cout << "started resampling" << std::endl;
     igarashi::resampling(V_contours, E_contours, sampling_width, V_contours_resampled, E_contours_resampled);
-    std::cout << "finished resampling" << std::endl;
 
-    // Add the resampled contours
+    // Append the resampled contours
     std::tie(V_cat, E_cat) = helpers::cat_mesh(V_contours_resampled, E_contours_resampled);
 
+    // Construct the stitch graph
     std::vector<std::vector<std::vector<int>>> A_contours;
-    std::cout << "started meshing" << std::endl;
     igarashi::meshing(V_contours_resampled, E_contours_resampled, A_contours);
-    std::cout << "finished meshing" << std::endl;
 
     // Visualize the stitch graph
     std::vector<Eigen::MatrixXd> V_mesh_list;
@@ -189,11 +195,13 @@ void igarashi_helper(
         E_mesh_list.push_back(E_mesh);
     }
 
-    // Add the stitch graph
-    Eigen::MatrixXd V_cat_2;
-    Eigen::MatrixXi E_cat_2;
-    std::tie(V_cat_2, E_cat_2) = helpers::cat_mesh(V_mesh_list, E_mesh_list);
-    std::tie(V_cat, E_cat) = helpers::cat_mesh(V_cat, E_cat, V_cat_2, E_cat_2);
+    // Append the stitch graph
+    if (V_mesh_list.size() > 0) {
+        Eigen::MatrixXd V_cat_2;
+        Eigen::MatrixXi E_cat_2;
+        std::tie(V_cat_2, E_cat_2) = helpers::cat_mesh(V_mesh_list, E_mesh_list);
+        std::tie(V_cat, E_cat) = helpers::cat_mesh(V_cat, E_cat, V_cat_2, E_cat_2);
+    }
 
     // Update the viewer
     key_down(viewer, '4', 0);
@@ -230,8 +238,8 @@ int main(int argc, char *argv[])
         glfwGetWindowSize(viewer.window, &viewer_width, &viewer_height);
 
         // Define next window position + size
-        float window_width = 200;
-        float window_height = 200;
+        float window_width = 300;
+        float window_height = 300;
         float window_x = viewer_width - window_width;
         ImGui::SetNextWindowPos(ImVec2(window_x, 0), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(window_width, window_height), ImGuiCond_FirstUseEver);
@@ -240,20 +248,36 @@ int main(int argc, char *argv[])
             ImGuiWindowFlags_NoSavedSettings);
 
         // Parameters
+
         ImGui::PushItemWidth(-80);
-        ImGui::InputDouble("stitch_width", &stitch_width);
-        ImGui::InputDouble("stitch_height", &stitch_height);
 
-        if (ImGui::Button("ARAP-parameterization"))
-            arap_based_helper_1(viewer, stitch_height, stitch_width, V_arap, E_arap);
+        // Crochet Parameters
+        if (ImGui::TreeNodeEx("Crochet Parameters", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::InputDouble("Stitch width", &stitch_width);
+            ImGui::InputDouble("Stitch height", &stitch_height);
+            ImGui::TreePop();
+        }
+
+        // ARAP-based
+        if (ImGui::TreeNodeEx("ARAP-based pattern generation", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::Button("ARAP-parameterization"))
+                arap_parameterization_helper(viewer, stitch_height, stitch_width, V_arap, E_arap);
             if (ImGui::Button("ARAP-based"))
-            arap_based_helper_2(viewer, stitch_height, stitch_width, V_arap, E_arap);
-        ImGui::InputDouble("rotation", &rotation);
-        ImGui::Text("distortion: %lf", distortion);
-        ImGui::Text("max differ: %lf", max_difference);
+                arap_based_helper(viewer, stitch_height, stitch_width, V_arap, E_arap);
+            ImGui::InputDouble("UV rotation", &rotation);
+            ImGui::Text("Metric distortion: %lf", distortion);
+            ImGui::Text("Max edge difference: %lf", max_difference);
+            ImGui::TreePop();
+        }
 
-        if (ImGui::Button("igarashi"))
-            igarashi_helper(viewer, stitch_height, stitch_width, V_igarashi, E_igarashi);
+        // Igarashi
+        if (ImGui::TreeNodeEx("Igarashi's Algorithm", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::Button("Igarashi"))
+                igarashi_helper(viewer, first_vertex, last_vertex, stitch_height, stitch_width, V_igarashi, E_igarashi);
+            ImGui::InputInt("First vertex", &first_vertex);
+            ImGui::InputInt("Last vertex", &last_vertex);
+            ImGui::TreePop();
+        }
 
         ImGui::PopItemWidth();
 
