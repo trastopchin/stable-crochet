@@ -9,16 +9,16 @@ As detailed in the project report, for an input topological disk represented by 
 ## Screenshots
 
 <div style="display: flex; justify-content: center;">
-    <img src="images/bumpy_plane_low.png" alt="Render of bump_plane_low.obj" style="width: 50%;">
-    <img src="images/bumpy_plane_low_igarashi.png" alt="Corresponding stitch graph produced with the simplified version of Igarashi et al.'s algorithm." style="width: 50%;">
+    <img src="images/bumpy_plane_low.png" alt="Render of bump_plane_low.obj" style="width: 45%;">
+    <img src="images/bumpy_plane_low_igarashi.png" alt="Corresponding stitch graph produced with the simplified version of Igarashi et al.'s algorithm." style="width: 45%;">
 </div>
 <br>
 
 On the left, a render of bump_plane_low.obj, and on the right, its corresponding stitch graph produced with the simplified version of Igarashi et al.'s algorithm.
 
 <div style="display: flex; justify-content: center;">
-    <img src="images/three_bumps.png" alt="Render of bump_plane_low.obj" style="width: 50%;">
-    <img src="images/three_bumps_igarashi.png" alt="Corresponding stitch graph produced with the simplified version of Igarashi et al.'s algorithm." style="width: 50%;">
+    <img src="images/three_bumps.png" alt="Render of bump_plane_low.obj" style="width: 45%;">
+    <img src="images/three_bumps_igarashi.png" alt="Corresponding stitch graph produced with the simplified version of Igarashi et al.'s algorithm." style="width: 45%;">
 </div>
 <br>
 
