@@ -1,10 +1,28 @@
 # Computational Design of Stable Crochet
 
-# libigl example project
+A C++ / libigl implementation of two methods tackling the inverse design problem for crochet. Implemented as part of a semester project on the computational design of stable crochet.
 
-A blank project example showing how to use libigl and cmake. Feel free and
-encouraged to copy or fork this project as a way of starting a new personal
-project using libigl.
+As detailed in the project report, for an input topological disk represented by a triangle mesh, I implemented visualizations for:
+1. An ARAP-based crochet pattern generation algorithm, and 
+2. A simplified version of Igarashi et al.'s algorithm.
+
+## Screenshots
+
+<div style="display: flex; justify-content: center;">
+    <img src="images/bumpy_plane_low.png" alt="Render of bump_plane_low.obj" style="width: 45%;">
+    <img src="images/bumpy_plane_low_igarashi.png" alt="Corresponding stitch graph produced with the simplified version of Igarashi et al.'s algorithm." style="width: 45%;">
+</div>
+<br>
+
+On the left, a render of bump_plane_low.obj, and on the right, its corresponding stitch graph produced with the simplified version of Igarashi et al.'s algorithm.
+
+<div style="display: flex; justify-content: center;">
+    <img src="images/three_bumps.png" alt="Render of bump_plane_low.obj" style="width: 45%;">
+    <img src="images/three_bumps_igarashi.png" alt="Corresponding stitch graph produced with the simplified version of Igarashi et al.'s algorithm." style="width: 45%;">
+</div>
+<br>
+
+On the left, a render of three_bumps.obj, and on the right, its corresponding stitch graph produced with the simplified version of Igarashi et al.'s algorithm.
 
 ## Compile
 
@@ -21,50 +39,4 @@ This should find and build the dependencies and create a `example` binary.
 
 From within the `build` directory just issue:
 
-    ./example
-
-A glfw app should launch displaying a 3D cube.
-
-## Using other modules of libigl
-
-This example project uses the `igl::opengl::glfw::Viewer`, therefore it requires
-the glfw module of libigl. This shows up in the CMakeLists.txt 
-
-```cmake
-igl_include(glfw)
-…
-target_link_libraries(${PROJECT_NAME} PUBLIC igl::glfw)
-```
-
-Suppose you also wanted to use the triangle module in libigl. Then you would
-change these to
-
-```cmake
-igl_include(glfw)
-igl_include(restricted triangle)
-…
-target_link_libraries(${PROJECT_NAME} PUBLIC igl::glfw igl_restricted::triangle)
-```
-
-The "restricted" appears in this case because the triangle library has a more
-restricted license than libigl. See other examples commented out in
-CMakeLists.txt.
-
-
-## Dependencies
-
-The only dependencies are STL, Eigen, [libigl](http://libigl.github.io/libigl/) and the dependencies
-of the `igl::opengl::glfw::Viewer` (OpenGL, glad and GLFW).
-
-The CMake build system will automatically download libigl and its dependencies using
-[CMake FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html),
-thus requiring no setup on your part.
-
-### Use a local copy of libigl
-You can use the CMake cache variable `FETCHCONTENT_SOURCE_DIR_LIBIGL` when configuring your CMake project for
-the first time to aim it at a local copy of libigl instead.
-```
-cmake -DFETCHCONTENT_SOURCE_DIR_LIBIGL=<path-to-libigl> ..
-```
-When changing this value, do not forget to clear your `CMakeCache.txt`, or to update the cache variable
-via `cmake-gui` or `ccmake`.
+    ./stable_crochet input.obj
