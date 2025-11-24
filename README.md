@@ -1,6 +1,6 @@
 # Computational Design of Stable Crochet
 
-A C++ / libigl implementation of two methods tackling the inverse design problem for crochet. Implemented as part of a semester thesis project on the computational design of stable crochet, as detailed in the [project report]([report/report.pdf](https://github.com/trastopchin/stable-crochet/blob/main/report/report.pdf)).
+A C++ / libigl implementation of two methods tackling the inverse design problem for crochet. Implemented as part of a semester thesis project on the computational design of stable crochet, as detailed in the [project report](https://github.com/trastopchin/stable-crochet/blob/main/report/report.pdf).
 
 For an input topological disk represented by a triangle mesh, I implemented visualizations for:
 1. An ARAP-based crochet pattern generation algorithm, and 
